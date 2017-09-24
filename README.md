@@ -1,0 +1,1 @@
+Ethereum powered blockchain location encoder
