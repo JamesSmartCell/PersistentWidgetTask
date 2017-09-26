@@ -4,8 +4,7 @@ android {
     compileSdkVersion 26
     buildToolsVersion "26.0.0"
     defaultConfig {
-        applicationId "xyz.bitfwd.zaignarly"
-        //applicationId "com.automatons.mustgetthere"
+        applicationId "xyz.jamesb.widgettask"
         minSdkVersion 21
         targetSdkVersion 26
         versionCode 1

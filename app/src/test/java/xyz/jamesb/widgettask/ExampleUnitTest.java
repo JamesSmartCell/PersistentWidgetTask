@@ -1,4 +1,4 @@
-package xyz.bitfwd.zaignarly;
+package xyz.jamesb.widgettask;
 
 import org.junit.Test;
 

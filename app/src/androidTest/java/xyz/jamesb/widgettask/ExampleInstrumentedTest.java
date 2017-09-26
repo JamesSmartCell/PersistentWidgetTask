@@ -1,4 +1,4 @@
-package xyz.bitfwd.zaignarly;
+package xyz.jamesb.widgettask;
 
 import android.content.Context;
 import android.support.test.InstrumentationRegistry;
@@ -23,6 +23,6 @@ public class ExampleInstrumentedTest
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getTargetContext();
 
-        assertEquals("xyz.bitfwd.zaignarly", appContext.getPackageName());
+        assertEquals("xyz.bitfwd.widgettask", appContext.getPackageName());
     }
 }
