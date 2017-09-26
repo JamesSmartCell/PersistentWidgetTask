@@ -67,7 +67,6 @@ public class LocationService extends Service
                 {
                     case GOT_HOME:
                         mCounter+=10;
-                        updateWidget();
                         break;
 
                     case UPDATE:
@@ -76,12 +75,13 @@ public class LocationService extends Service
 
                     case ACTION_TOGGLE:
                         toggleButton();
-                        updateWidget();
                         break;
 
                     default:
                         break;
                 }
+
+                updateWidget();
             }
         }
         catch (Exception e)
@@ -102,8 +102,6 @@ public class LocationService extends Service
             editor.putInt("count", mCounter);
             editor.apply();
         }
-
-        updateWidget();
     }
 
     public void toggleButton()
@@ -145,6 +143,7 @@ public class LocationService extends Service
         }
 
         mCtx = this;
+        Util.scheduleJob(getApplicationContext()); //ensure we always start
     }
 
     @Nullable
