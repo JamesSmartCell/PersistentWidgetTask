@@ -18,7 +18,11 @@ public class WidgetReceiver extends BroadcastReceiver
     {
         Intent i = new Intent(context, LocationService.class);
         String action = intent.getAction();
+        int widgetId = intent.getIntExtra("id", 0);
+        int state = intent.getIntExtra("state", 0);
         i.setAction(action);
+        i.putExtra("id", widgetId);
+        i.putExtra("state", state);
         context.startService(i);
     }
 }

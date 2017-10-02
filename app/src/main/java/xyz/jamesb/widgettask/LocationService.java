@@ -18,12 +18,12 @@ import xyz.jamesb.widgettask.widget.WidgetProvider;
 
 import static xyz.jamesb.widgettask.LocationService.LOCATION.ACTION_TOGGLE;
 import static xyz.jamesb.widgettask.LocationService.LOCATION.FINAL;
+import static xyz.jamesb.widgettask.LocationService.LOCATION.RESTART;
 
 /**
  * Created by James on 24/09/2017.
  */
 
-//periodically wake the phone, get the location, write to blockchain
 
 public class LocationService extends Service
 {
@@ -33,20 +33,12 @@ public class LocationService extends Service
     public static final int STATE_ACTIVE = 1;
     public static final int STATE_OFF = 2;
 
-    private static int mCounter = 0;
-    private static int mCurrentState = STATE_OFF;
-
-    public static int getCurrentState()
-    {
-        return mCurrentState;
-    }
-
     public enum LOCATION
     {
         UPDATE,
         GOT_HOME,
         ACTION_TOGGLE,
-
+        RESTART,
 
         FINAL
     }
@@ -59,6 +51,8 @@ public class LocationService extends Service
         try
         {
             int cValue = Integer.valueOf(intent.getAction());
+            int widgetId = intent.getIntExtra("id", 0);
+            int state = intent.getIntExtra("state", 0);
             if (cValue < FINAL.ordinal())
             {
                 LOCATION l = LOCATION.values()[cValue];
@@ -66,22 +60,24 @@ public class LocationService extends Service
                 switch (l)
                 {
                     case GOT_HOME:
-                        mCounter+=10;
+                        updateWidget(10);
                         break;
 
                     case UPDATE:
-                        updateCycle();
+                        updateWidget(1);
                         break;
 
                     case ACTION_TOGGLE:
-                        toggleButton();
+                        toggleButton(widgetId, state);
+                        updateWidget(0);
+                        break;
+
+                    case RESTART:
                         break;
 
                     default:
                         break;
                 }
-
-                updateWidget();
             }
         }
         catch (Exception e)
@@ -92,32 +88,29 @@ public class LocationService extends Service
         return START_STICKY;
     }
 
-    private void updateCycle()
+    private int getWidgetState(int widgetId)
     {
-        if (mCurrentState == STATE_ACTIVE)
-        {
-            mCounter++;
-            SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
-            SharedPreferences.Editor editor = preferences.edit();
-            editor.putInt("count", mCounter);
-            editor.apply();
-        }
+        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this);
+        String key = "wid" + widgetId + "state";
+        int state = sp.getInt(key, 0);
+        return state;
     }
 
-    public void toggleButton()
+    private void toggleButton(int widgetId, int state)
     {
-        if (mCurrentState == STATE_OFF)
+        if (state == STATE_OFF)
         {
-            mCurrentState = STATE_ACTIVE;
+            state = STATE_ACTIVE;
         }
         else
         {
-            mCurrentState = STATE_OFF;
+            state = STATE_OFF;
         }
 
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
-        SharedPreferences.Editor editor = preferences.edit();
-        editor.putInt("currentState", mCurrentState);
+        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this);
+        String key = "wid" + widgetId + "state";
+        SharedPreferences.Editor editor = sp.edit();
+        editor.putInt(key, state);
         editor.apply();
     }
 
@@ -130,17 +123,6 @@ public class LocationService extends Service
     public void onCreate()
     {
         super.onCreate();
-        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this);
-        if (sp != null)
-        {
-            mCurrentState = sp.getInt("currentState", STATE_OFF);
-            mCounter = sp.getInt("count", 0);
-        }
-        else
-        {
-            mCurrentState = STATE_OFF;
-            mCounter = 0;
-        }
 
         mCtx = this;
         Util.scheduleJob(getApplicationContext()); //ensure we always start
@@ -153,10 +135,59 @@ public class LocationService extends Service
         return null;
     }
 
-    private void updateWidget()
+    private void updateWidget(int amount)
+    {
+        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this);
+
+        AppWidgetManager man = AppWidgetManager.getInstance(this);
+        int[] ids = man.getAppWidgetIds(new ComponentName(this, WidgetProvider.class));
+        for (int widgetId : ids)
+        {
+            //pull data for this widget
+            String baseKey = "wid" + widgetId;
+            int counter = sp.getInt(baseKey + "count", 0);
+            int buttonState = sp.getInt(baseKey + "state", STATE_OFF);
+            if (buttonState == STATE_ACTIVE)
+            {
+                counter = updateWidgetCounter(widgetId, amount, counter);
+            }
+
+            String buttonText = getButtonText(buttonState);
+
+            //Restart app if widget clicked outside of the box, keeping track of which widget was clicked
+            Intent resultIntent = new Intent(this, MainActivity.class);
+            resultIntent.setAction(String.valueOf(RESTART.ordinal()));
+            resultIntent.putExtra("id", widgetId);
+            resultIntent.setFlags(widgetId);
+            TaskStackBuilder stackBuilder = TaskStackBuilder.create(this);
+            stackBuilder.addParentStack(MainActivity.class);
+            stackBuilder.addNextIntent(resultIntent);
+            PendingIntent rPI = stackBuilder.getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT);
+
+            //add intent to broadcast a message. This is added onto the button
+            Intent intent = new Intent(this, WidgetReceiver.class);
+            intent.setAction(String.valueOf(ACTION_TOGGLE.ordinal()));
+            intent.putExtra("id", widgetId);
+            intent.putExtra("state", buttonState);
+            int uid = baseKey.hashCode();
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(this,
+                    uid, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+
+            RemoteViews remoteViews = new RemoteViews(getApplicationContext().getPackageName(),
+                    R.layout.widget);
+            // Set the text
+            remoteViews.setTextViewText(R.id.textActive, "" + counter);
+            remoteViews.setOnClickPendingIntent(R.id.relLayout, rPI);
+            remoteViews.setOnClickPendingIntent(R.id.button2, pendingIntent);
+            remoteViews.setTextViewText(R.id.button2, buttonText);
+            man.updateAppWidget(widgetId, remoteViews);
+        }
+    }
+
+    private String getButtonText(int state)
     {
         String buttonText = "";
-        if (mCurrentState == STATE_OFF)
+        if (state == STATE_OFF)
         {
             buttonText = getResources().getString(R.string.start);
         }
@@ -165,33 +196,21 @@ public class LocationService extends Service
             buttonText = getResources().getString(R.string.stop);
         }
 
-        AppWidgetManager man = AppWidgetManager.getInstance(this);
-        int[] ids = man.getAppWidgetIds(new ComponentName(this, WidgetProvider.class));
+        return buttonText;
+    }
 
-        //Restart app if widget clicked outside of the box
-        Intent resultIntent = new Intent(this, MainActivity.class);
-        resultIntent.setAction("restart");
-        TaskStackBuilder stackBuilder = TaskStackBuilder.create(this);
-        stackBuilder.addParentStack(MainActivity.class);
-        stackBuilder.addNextIntent(resultIntent);
-        PendingIntent rPI = stackBuilder.getPendingIntent(0,  PendingIntent.FLAG_UPDATE_CURRENT);
-
-        //add intent to broadcast a message. This is added onto the button
-        Intent intent = new Intent(this, WidgetReceiver.class);
-        intent.setAction(String.valueOf(ACTION_TOGGLE.ordinal()));
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(this,
-                0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-
-        for (int widgetId : ids)
+    private int updateWidgetCounter(int widgetId, int amount, int counter)
+    {
+        if (amount != 0)
         {
-            RemoteViews remoteViews = new RemoteViews(getApplicationContext().getPackageName(),
-                    R.layout.widget);
-            // Set the text
-            remoteViews.setTextViewText(R.id.textActive, "" + mCounter);
-            remoteViews.setOnClickPendingIntent(R.id.relLayout, rPI);
-            remoteViews.setOnClickPendingIntent(R.id.button2, pendingIntent);
-            remoteViews.setTextViewText(R.id.button2, buttonText);
-            man.updateAppWidget(widgetId, remoteViews);
+            SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this);
+            String key = "wid" + widgetId + "count";
+            counter += amount;
+            SharedPreferences.Editor editor = sp.edit();
+            editor.putInt(key, counter);
+            editor.apply();
         }
+
+        return counter;
     }
 }
